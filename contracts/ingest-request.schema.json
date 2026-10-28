@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LogPilot v1 ingestion request",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "events"
+  ],
+  "properties": {
+    "events": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 500,
+      "items": {
+        "$ref": "./log-event.schema.json"
+      }
+    }
+  },
+  "examples": [
+    {
+      "events": [
+        {
+          "event_id": "0192f6e4-7d7a-7b03-a909-443f6f27c853",
+          "org_id": "demo",
+          "service": "checkout-api",
+          "level": "ERROR",
+          "timestamp": "2026-10-28T10:35:22.123Z",
+          "message": "Database connection timed out",
+          "trace_id": "trace-demo-001",
+          "metadata": {
+            "environment": "local",
+            "host": "developer-machine"
+          }
+        }
+      ]
+    }
+  ]
+}

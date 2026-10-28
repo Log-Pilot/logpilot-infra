@@ -1,0 +1,75 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LogPilot v1 log event",
+  "description": "Canonical event shape for the first local LogPilot iteration.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "service",
+    "level",
+    "timestamp",
+    "message"
+  ],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "Optional stable ID. Producers should reuse the same ID when retrying."
+    },
+    "org_id": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128,
+      "default": "demo",
+      "description": "Local demo label only; not an authorization boundary."
+    },
+    "service": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 128
+    },
+    "level": {
+      "type": "string",
+      "enum": [
+        "TRACE",
+        "DEBUG",
+        "INFO",
+        "WARN",
+        "ERROR"
+      ]
+    },
+    "timestamp": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO-8601 date-time with timezone; normalized to UTC when stored."
+    },
+    "message": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 32768
+    },
+    "trace_id": {
+      "type": "string",
+      "maxLength": 256
+    },
+    "metadata": {
+      "type": "object",
+      "additionalProperties": true
+    }
+  },
+  "examples": [
+    {
+      "event_id": "0192f6e4-7d7a-7b03-a909-443f6f27c853",
+      "org_id": "demo",
+      "service": "checkout-api",
+      "level": "ERROR",
+      "timestamp": "2026-10-28T10:35:22.123Z",
+      "message": "Database connection timed out",
+      "trace_id": "trace-demo-001",
+      "metadata": {
+        "environment": "local",
+        "host": "developer-machine"
+      }
+    }
+  ]
+}

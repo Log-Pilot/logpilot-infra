@@ -1,195 +1,86 @@
-# logpilot-infra — Infrastructure & DevOps
+# LogPilot local development
 
-> **All Infrastructure as Code, Kubernetes manifests, CI/CD pipelines, monitoring stack, and deployment automation for the LogPilot platform.**
+This repository contains the local integration setup for the first LogPilot iteration. The Compose stack starts PostgreSQL, Redis, the ingest API, and the processor. The query API and web explorer are planned for later phases.
 
----
+## Prerequisites
 
-## 📋 Overview
+- Docker Desktop or another Docker Engine with the Compose plugin.
+- Python 3 for the seed script.
+- Network access on the first build so Docker can download base images and Maven dependencies.
 
-| Property | Value |
-|----------|-------|
-| **Name** | `logpilot-infra` |
-| **Technology** | Terraform, Kubernetes (EKS), Docker, GitHub Actions, Helm, Prometheus, Grafana |
-| **Cloud Provider** | AWS (EKS, RDS, ElastiCache, S3, ALB, ECR, Route 53, CloudWatch) |
-| **Team Owner** | DevOps/Cloud Engineer |
-| **Build Priority** | Month 1, Week 1–2 — foundation for everything |
+The app images use Java 21. You do not need a local Java installation to run the Compose stack.
 
----
+## Get the required repositories
 
-## 🎯 Responsibilities
+Keep these repositories as sibling folders because Compose uses relative build contexts:
 
-1. **AWS Infrastructure** — Provision all cloud resources via Terraform
-2. **Kubernetes Cluster** — EKS cluster setup, namespaces, RBAC
-3. **Service Deployments** — K8s Deployment + Service + HPA manifests for all 8 services
-4. **CI/CD Pipelines** — GitHub Actions workflows for build → test → deploy
-5. **Docker** — Standardized Dockerfiles and docker-compose for local dev
-6. **Monitoring** — Prometheus + Grafana stack for platform observability
-7. **Secrets Management** — AWS Secrets Manager integration with K8s
-8. **SSL/DNS** — Route 53 + ACM for domain and certificates
-9. **Druid Cluster** — StatefulSet + ZooKeeper for Apache Druid
-
----
-
-## 📦 Codebase Structure
-
-```
-logpilot-infra/
-├── terraform/                                      # Infrastructure as Code
-│   ├── main.tf                                     # Root module
-│   ├── variables.tf                                # Input variables
-│   ├── outputs.tf                                  # Output values
-│   ├── provider.tf                                 # AWS provider config
-│   ├── backend.tf                                  # S3 remote state backend
-│   ├── modules/
-│   │   ├── vpc/                                    # VPC, subnets, security groups
-│   │   │   ├── main.tf
-│   │   │   ├── variables.tf
-│   │   │   └── outputs.tf
-│   │   ├── eks/                                    # EKS cluster + node groups
-│   │   │   ├── main.tf
-│   │   │   ├── variables.tf
-│   │   │   └── outputs.tf
-│   │   ├── rds/                                    # PostgreSQL RDS instance
-│   │   │   ├── main.tf
-│   │   │   ├── variables.tf
-│   │   │   └── outputs.tf
-│   │   ├── elasticache/                            # Redis cluster
-│   │   │   ├── main.tf
-│   │   │   ├── variables.tf
-│   │   │   └── outputs.tf
-│   │   ├── s3/                                     # Druid deep storage, log archival
-│   │   │   ├── main.tf
-│   │   │   └── variables.tf
-│   │   ├── ecr/                                    # Docker container registry
-│   │   │   └── main.tf
-│   │   ├── alb/                                    # Application Load Balancer
-│   │   │   ├── main.tf
-│   │   │   └── variables.tf
-│   │   ├── route53/                                # DNS + SSL certificates
-│   │   │   └── main.tf
-│   │   └── secrets-manager/                        # Secret store
-│   │       └── main.tf
-│   └── environments/
-│       ├── dev/
-│       │   └── terraform.tfvars                    # Dev env variables
-│       ├── staging/
-│       │   └── terraform.tfvars                    # Staging env variables
-│       └── prod/
-│           └── terraform.tfvars                    # Production env variables
-│
-├── kubernetes/                                     # K8s manifests
-│   ├── namespaces/
-│   │   ├── logpilot-prod.yaml
-│   │   └── logpilot-monitoring.yaml
-│   ├── deployments/                                # One per service
-│   │   ├── logpilot-collector.yaml
-│   │   ├── logpilot-ingest.yaml
-│   │   ├── logpilot-processor.yaml
-│   │   ├── logpilot-ai-engine.yaml
-│   │   ├── logpilot-alerting.yaml
-│   │   ├── logpilot-gateway.yaml
-│   │   ├── logpilot-query.yaml
-│   │   └── logpilot-frontend.yaml
-│   ├── services/                                   # K8s Service (ClusterIP/NodePort)
-│   │   ├── logpilot-collector-svc.yaml
-│   │   ├── logpilot-ingest-svc.yaml
-│   │   ├── logpilot-processor-svc.yaml
-│   │   ├── logpilot-ai-engine-svc.yaml
-│   │   ├── logpilot-alerting-svc.yaml
-│   │   ├── logpilot-gateway-svc.yaml
-│   │   ├── logpilot-query-svc.yaml
-│   │   └── logpilot-frontend-svc.yaml
-│   ├── hpa/                                        # HorizontalPodAutoscaler
-│   │   ├── logpilot-ingest-hpa.yaml                # Scale 2→20 on CPU
-│   │   └── logpilot-processor-hpa.yaml
-│   ├── configmaps/
-│   │   └── logpilot-config.yaml                    # Shared env variables
-│   ├── secrets/
-│   │   └── logpilot-secrets.yaml                   # Encrypted credentials
-│   ├── ingress/
-│   │   └── alb-ingress.yaml                        # ALB Ingress Controller rules
-│   ├── druid/                                      # Apache Druid cluster
-│   │   ├── druid-statefulset.yaml
-│   │   ├── druid-service.yaml
-│   │   ├── zookeeper-statefulset.yaml
-│   │   └── zookeeper-service.yaml
-│   └── monitoring/
-│       ├── prometheus/
-│       │   ├── prometheus-deployment.yaml
-│       │   ├── prometheus-config.yaml
-│       │   └── prometheus-service.yaml
-│       └── grafana/
-│           ├── grafana-deployment.yaml
-│           ├── grafana-dashboards/                  # Pre-built dashboards JSON
-│           │   ├── platform-overview.json
-│           │   ├── service-health.json
-│           │   └── ingestion-pipeline.json
-│           └── grafana-service.yaml
-│
-├── docker/                                          # Docker configs
-│   ├── docker-compose.yml                           # Full local dev stack
-│   ├── docker-compose.dev.yml                       # Dev overrides (hot-reload)
-│   └── Dockerfile.spring-boot-template              # Standard Spring Boot Dockerfile
-│
-├── github-actions/                                  # CI/CD workflow templates
-│   ├── build-and-deploy.yml                         # Main CI/CD pipeline
-│   ├── test-only.yml                                # PR test pipeline
-│   └── druid-deploy.yml                             # Druid-specific deployment
-│
-├── scripts/                                         # Utility scripts
-│   ├── setup-cluster.sh                             # One-click EKS cluster setup
-│   ├── deploy-all.sh                                # Deploy all services
-│   ├── rollback.sh                                  # Rollback last deployment
-│   ├── health-check.sh                              # Smoke test all endpoints
-│   └── seed-data.sh                                 # Load sample data for testing
-│
-└── README.md
+```sh
+git clone --branch codex/first-iteration-bootstrap https://github.com/Log-Pilot/logpilot-infra.git
+git clone --branch codex/ingest-api-v1 https://github.com/Log-Pilot/logpilot-ingest-service.git
+git clone --branch codex/processor-postgres-v1 https://github.com/Log-Pilot/logpilot-processor-service.git
 ```
 
----
+## Start the local stack
 
-## 🔗 AWS Services & Estimated Cost (MVP)
+From the `logpilot-infra` directory:
 
-| AWS Service | Purpose | Monthly Cost |
-|-------------|---------|-------------|
-| EKS (2× t3.medium) | Run all microservices | ~$150 |
-| RDS PostgreSQL (db.t3.micro) | Production database | ~$50 |
-| ElastiCache Redis (cache.t3.micro) | Stream buffer, cache | ~$30 |
-| S3 | Druid deep storage, archival | ~$20 |
-| ALB | Load balancer | ~$20 |
-| CloudWatch | Infra monitoring | ~$15 |
-| ECR | Docker image registry | ~$5 |
-| Route 53 + ACM | DNS + SSL | ~$5 |
-| **TOTAL** | | **~$295/month** |
-
----
-
-## 🔄 CI/CD Pipeline Flow
-
-```
-Code Push to main
-    │
-    ├── 1. Run unit tests (mvn test / ng test)
-    ├── 2. Build Docker image, tag with Git SHA
-    ├── 3. Push image to Amazon ECR
-    ├── 4. Run integration tests (test EKS namespace)
-    ├── 5. Deploy to production EKS (kubectl rolling update)
-    ├── 6. Post deployment status to Slack
-    └── 7. Run smoke tests (health check endpoints)
+```sh
+test -f .env || cp .env.example .env
+docker compose up --build -d
+docker compose ps
 ```
 
----
+Compose waits for Redis and PostgreSQL health checks before starting the app containers. The ingest readiness check includes Redis; processor readiness includes Redis and PostgreSQL. The processor applies its Flyway migration on startup. To follow startup logs:
 
-## ✅ Setup Checklist
+```sh
+docker compose logs -f ingest-service processor-service
+```
 
-- [ ] AWS account created with IAM roles for Terraform
-- [ ] S3 bucket for Terraform state + DynamoDB for locking
-- [ ] `terraform init && terraform plan && terraform apply` for each environment
-- [ ] EKS cluster reachable via `kubectl`
-- [ ] All Docker images build and push to ECR
-- [ ] GitHub Actions secrets configured (AWS creds, Docker creds)
-- [ ] Druid cluster healthy with ZooKeeper
-- [ ] Prometheus scraping all service metrics
-- [ ] Grafana dashboards loaded and accessible
-- [ ] ALB Ingress routing traffic correctly
-- [ ] SSL certificate issued and attached
+## Load repeatable demo events
+
+After the services report healthy:
+
+```sh
+python3 scripts/seed-demo.py
+```
+
+The script submits five sample events, including checkout errors and a shared trace ID. Event IDs are stable between runs, so PostgreSQL stores only one row per demo event even if the script is run again. Timestamps use the current time so seeded data is recent. Ingest returns before asynchronous processing finishes; follow the processor logs if you want to observe processing.
+
+The API is available at `http://localhost:8081`; PostgreSQL is at `127.0.0.1:5432` and Redis at `127.0.0.1:6379`. The processor's health endpoint is at `http://localhost:8082/actuator/health/readiness`. You can override host ports in `.env` with `INGEST_PORT`, `PROCESSOR_PORT`, `POSTGRES_PORT`, and `REDIS_PORT`. The seed script accepts `INGEST_URL` when the ingest API uses a different host/port, for example `INGEST_URL=http://127.0.0.1:18081 python3 scripts/seed-demo.py`.
+
+The local database credentials in `.env.example` are for development only. Do not reuse them in a deployed environment or commit a real `.env` file.
+
+## Stop, restart, or reset
+
+Stop containers while preserving database and stream data:
+
+```sh
+docker compose down
+```
+
+Start them again:
+
+```sh
+docker compose up -d
+```
+
+Delete the local PostgreSQL and Redis volumes and start with empty state:
+
+```sh
+docker compose down -v
+docker compose up --build -d
+```
+
+`down -v` permanently removes the local database and Redis stream data.
+
+## Troubleshooting
+
+- **A port is already in use:** change its host port in `.env`, then recreate the stack with `docker compose up -d`.
+- **An app stays unhealthy:** inspect `docker compose logs <service>` and check that PostgreSQL and Redis became healthy first.
+- **Image build fails downloading dependencies:** retry after network access to Docker registries and Maven Central is available.
+- **Seed command cannot reach ingest:** check `docker compose ps`, wait until ingest is healthy, or set the correct `INGEST_URL`.
+- **You want a clean demo state:** run `docker compose down -v`, then start the stack and seed again.
+
+## What this local phase includes
+
+The local stack demonstrates event ingestion, asynchronous Redis Stream processing, and PostgreSQL persistence. It does not yet include search endpoints, a web UI, authentication, Druid, cloud resources, or production secrets management. See the first-iteration and future-iterations plans in the workspace handoff documents for the remaining product steps.

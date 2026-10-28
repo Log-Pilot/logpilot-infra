@@ -1,0 +1,86 @@
+name: logpilot-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-logpilot}
+      POSTGRES_USER: ${POSTGRES_USER:-logpilot}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-logpilot-local-only}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 5s
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 3s
+
+  ingest-service:
+    build:
+      context: ../logpilot-ingest-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8081
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+    ports:
+      - "127.0.0.1:${INGEST_PORT:-8081}:8081"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8081/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 20s
+
+  processor-service:
+    build:
+      context: ../logpilot-processor-service
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      SERVER_PORT: 8082
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      DATABASE_URL: jdbc:postgresql://postgres:5432/${POSTGRES_DB:-logpilot}
+      DATABASE_USERNAME: ${POSTGRES_USER:-logpilot}
+      DATABASE_PASSWORD: ${POSTGRES_PASSWORD:-logpilot-local-only}
+    ports:
+      - "127.0.0.1:${PROCESSOR_PORT:-8082}:8082"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "-", "http://127.0.0.1:8082/actuator/health/readiness"]
+      interval: 10s
+      timeout: 3s
+      retries: 12
+      start_period: 30s
+
+volumes:
+  postgres-data:
+  redis-data:
